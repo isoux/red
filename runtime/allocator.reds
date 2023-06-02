@@ -108,6 +108,7 @@ memory: declare struct! [					; TBD: instanciate this structure per OS thread
 	stk-refs [int-ptr!]						;-- buffer to stack references to update during GC
 	stk-tail [int-ptr!]						;-- tail pointer on stack references buffer
 	stk-sz	 [integer!]						;-- size of stack references buffer in 64-bits slots
+	n-frames [integer!]						;-- number of series frames
 ]
 
 
@@ -210,6 +211,7 @@ free-all: func [
 		free-virtual as int-ptr! s-frame
 		s-frame: s-next
 	]
+	memory/n-frames: 0
 
 	b-frame: memory/b-head
 	while [b-frame <> null][
@@ -360,6 +362,7 @@ alloc-series-frame: func [
 	frame/tail: (as byte-ptr! frame) + size	;-- point to last byte in frame
 	frame/next: null
 	frame/prev: null
+	memory/n-frames: memory/n-frames + 1
 	
 	frm: memory/s-head
 	case [
@@ -416,7 +419,8 @@ free-series-frame: func [
 		null? memory/s-head
 		null? memory/s-tail
 	]
-	
+
+	memory/n-frames: memory/n-frames - 1
 	free-virtual as int-ptr! frame			;-- release the memory to the OS
 ]
 
@@ -733,6 +737,82 @@ extract-stack-refs: func [
 		;	refs: refs + 2
 		;	refs = tail
 		;]
+	]
+]
+
+#define N_FRAMES_MIN	100
+
+frame-data!: alias struct! [
+	head	[series-frame!]
+	tail	[series-frame!]
+]
+
+do-compact: func [
+	data	[frame-data!]
+	/local
+		head [series-frame!]
+		tail [series-frame!]
+		refs [int-ptr!]
+][
+	refs: memory/stk-refs
+	head: data/head
+	tail: data/tail
+	while [head <> tail][
+		refs: compact-series-frame head refs
+		head: head/next
+	]
+]
+
+mt-collect-frames: func [	;; multi-threads version
+	type			[integer!]
+	/local
+		f			[float!]
+		n-groups	[integer!]
+		frame		[series-frame!]
+		next		[series-frame!]
+		frame-data	[frame-data!]
+		data		[frame-data!]
+][
+	either memory/n-frames <= N_FRAMES_MIN [
+		n-groups: 0
+		frame: null
+		frame-data: null
+		data: null
+		collect-frames type
+	][
+		frame: memory/s-head
+		extract-stack-refs yes
+		f: (as float! memory/n-frames) / (as float! threadpool/n-max)
+		n-groups: as-integer (f + 1.0)
+		frame-data: as frame-data! allocate threadpool/n-max * size? frame-data!
+		data: frame-data
+		until [
+			data/head: frame
+			loop n-groups [
+				frame: frame/next
+				if null? frame [break]
+			]
+			data/tail: frame
+			data: data + 1
+			frame = null
+		]
+
+		while [frame-data <> data][
+			threadpool/add-task as int-ptr! :do-compact as int-ptr! frame-data
+			frame-data: frame-data + 1
+		]
+		collect-bigs
+		threadpool/wait
+
+		frame: memory/s-head
+		until [
+			next: frame/next
+			if frame/heap = as series! (frame + 1) [
+				free-series-frame frame
+			]
+			frame: next
+			frame = null
+		]
 	]
 ]
 

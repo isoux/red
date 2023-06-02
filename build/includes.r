@@ -98,6 +98,7 @@ write %build/bin/sources.r set-cache [
 		%ownership.reds
 		%parse.reds
 		%print.reds
+		%queue.reds
 		%random.reds
 		%red.reds
 		%redbin.reds
@@ -106,6 +107,7 @@ write %build/bin/sources.r set-cache [
 		%stack.reds
 		%structures.reds
 		%threads.reds
+		%threadpool.reds
 		%tokenizer.reds
 		%tools.reds
 		%unicode.reds

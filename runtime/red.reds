@@ -27,7 +27,7 @@ red: context [
 		#default [#include %platform/linux.reds]
 	]
 	
-	#include %threads.reds
+	#include %threadpool.reds
 	#include %allocator.reds
 	#include %crush.reds
 	
@@ -167,6 +167,7 @@ red: context [
 		name-table: as names! allocate TYPE_TOTAL_COUNT * size? names!	 ;-- datatype names table
 		action-table: as int-ptr! allocate 256 * TYPE_TOTAL_COUNT * size? pointer! ;-- actions jump table	
 
+		threadpool/init
 		datatype/init
 		unset/init
 		none/init

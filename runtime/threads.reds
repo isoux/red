@@ -22,6 +22,12 @@ thread: context [
 	#define WAIT_TIMEOUT	258
 	#define WAIT_OBJECT_0	0
 
+	SECURITY_ATTRIBUTES: alias struct! [
+		nLength 			 [integer!]
+		lpSecurityDescriptor [int-ptr!]
+		bInheritHandle 		 [integer!]
+	]
+
 	#import [
 		LIBC-file cdecl [
 			;-- use _beginthreadex to be sure libc functions work properly
@@ -52,6 +58,21 @@ thread: context [
 			;ExitThread: "ExitThread" [
 			;	retval		[integer!]
 			;]
+			CreateEventA: "CreateEventA" [
+				lpAttr		[SECURITY_ATTRIBUTES]
+				ManualReset	[logic!]
+				Initial		[logic!]
+				lpName		[c-string!]
+				return:		[handle!]
+			]
+			SetEvent: "SetEvent" [
+				hEvent		[handle!]
+				return:		[logic!]
+			]
+			ResetEvent: "ResetEvent" [
+				hEvent		[handle!]
+				return:		[logic!]
+			]
 			SwitchToThread: "SwitchToThread" [return: [logic!]]
 			CloseHandle: "CloseHandle" [
 				hObject		[handle!]

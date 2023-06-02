@@ -343,7 +343,8 @@ collector: context [
 
 		#if debug? = yes [if verbose > 1 [probe "sweeping..."]]
 		_hashtable/sweep ownership/table
-		collect-frames COLLECTOR_RELEASE
+		mt-collect-frames COLLECTOR_RELEASE
+		;collect-frames COLLECTOR_RELEASE
 
 		;-- unmark fixed series
 		unmark root/node
