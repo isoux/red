@@ -63,7 +63,6 @@ threadpool: context [
 	task!: alias struct! [
 		handler		[int-ptr!]	;-- thread-func!
 		data		[int-ptr!]	;-- user data
-		status		[task-status!]
 	]
 
 	worker!: alias struct! [
@@ -110,11 +109,10 @@ threadpool: context [
 			task: as task! queue/pop tasks
 			;assert task <> null
 			if task <> null [
-				task/status: TASK_RUNNING
 				handler: as thread-func! task/handler
 				handler task/data
-				task/status: TASK_DONE
 				system/atomic/sub :n-task 1
+				free as byte-ptr! task
 			]
 		]
 	]
@@ -131,14 +129,13 @@ threadpool: context [
 			task: as task! queue/pop tasks
 			either task <> null [
 				self/idle-tm: 0
-				task/status: TASK_RUNNING
 				handler: as thread-func! task/handler
 				handler task/data
-				task/status: TASK_DONE
+				free as byte-ptr! task
 				system/atomic/sub :n-task 1
 			][
 				cnt: self/idle-tm + 1
-				either cnt = 30000 [
+				either cnt = 500 [
 					self/running?: no
 					system/atomic/sub :n-worker 1
 					cnt: 0
@@ -158,14 +155,21 @@ threadpool: context [
 		worker0/running?: no
 	]
 
+	init-workers: does [
+		loop n-max [add-worker]
+	]
+
 	add-worker: func [/local w [worker!]][
 		w: workers
 		loop n-max [		;-- find a free worker
 			either w/running? [w: w + 1][break]
 		]
 		if workers + n-max <> w [
-			n-worker: n-worker + 1
-			if w/handle <> null [thread/detach w/handle]
+			system/atomic/add :n-worker 1
+			if w/handle <> null [
+				thread/detach w/handle
+				w/handle: null
+			]
 			w/running?: yes
 			w/idle-tm: 0
 			w/handle: thread/start as int-ptr! :worker-func as int-ptr! w 0
@@ -181,31 +185,18 @@ threadpool: context [
 			res		[logic!]
 			sz		[integer!]
 	][
+		system/atomic/add :n-task 1
 		task: as task! allocate size? task!
 		task/handler: handler
 		task/data: data
-		task/status: TASK_WAITING
 		res: queue/push tasks as int-ptr! task
-		system/atomic/add :n-task 1
-		either 1 < queue/size tasks [
-			if n-worker < n-max [add-worker]
-		][
-		#either OS = 'Windows [
-			unless worker0/running? [
-				worker0/running?: yes
-				worker0/event: thread/CreateEventA null no no null		;-- auto-reset event
-				worker0/handle: thread/start
-					as int-ptr! :worker0-func as int-ptr! worker0 0
-			]
-			thread/SetEvent worker0/event
-		][0]
-		]
+		assert n-worker > 0
 		res
 	]
 
 	wait: func [][
 		until [
-			platform/wait 0.005
+			platform/wait 0.001
 			zero? n-task
 		]
 	]

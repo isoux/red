@@ -85,6 +85,7 @@ collector: context [
 			flags [integer!]
 	][
 		s: as series! node/value
+		assert s <> null
 		flags: s/flags
 		new?: flags and flag-gc-mark = 0
 		if new? [s/flags: flags or flag-gc-mark]
@@ -114,6 +115,62 @@ collector: context [
 		]
 	]
 
+	do-mark-value: func [
+		value [red-value!]
+		/local
+			series	[red-series!]
+			obj		[red-object!]
+			ctx		[red-context!]
+			hash	[red-hash!]
+			path	[red-path!]
+	][
+		switch TYPE_OF(value) [
+			TYPE_BLOCK
+			TYPE_PAREN
+			TYPE_ANY_PATH [
+				series: as red-series! value
+				if series/node <> null [			;-- can happen in routine
+					#if debug? = yes [if verbose > 1 [print ["len: " block/rs-length? as red-block! series]]]
+					mark-block as red-block! value
+
+					if TYPE_OF(value) = TYPE_PATH [
+						path: as red-path! value
+						if path/args <> null [
+							;probe "path/args"
+							mark-block-node path/args
+						]
+					]
+				]
+			]
+			TYPE_ERROR
+			TYPE_PORT
+			TYPE_OBJECT [
+				#if debug? = yes [if verbose > 1 [print "object"]]
+				obj: as red-object! value
+				mark-context obj/ctx
+				if obj/on-set <> null [keep obj/on-set]
+			]
+			TYPE_CONTEXT [
+				#if debug? = yes [if verbose > 1 [print "context"]]
+				ctx: as red-context! value
+				;keep ctx/self
+				_hashtable/mark ctx/symbols
+				unless ON_STACK?(ctx) [mark-block-node ctx/values]
+			]
+			TYPE_HASH
+			TYPE_MAP [
+				#if debug? = yes [if verbose > 1 [print "hash/map"]]
+				hash: as red-hash! value
+				mark-block-node hash/node
+				_hashtable/mark hash/table			;@@ check if previously marked
+			]
+			default [0]
+		]
+	]
+
+	#define HAS_FREE_WORKER? [threadpool/n-task < threadpool/n-max]
+	#define BIG_BLOCK?(s) [(as-integer (s/tail - s/offset)) >> 4 > 5000]
+
 	mark-values: func [
 		value [red-value!]
 		tail  [red-value!]
@@ -129,6 +186,7 @@ collector: context [
 			ctx		[red-context!]
 			image	[red-image!]
 			len		[integer!]
+			s		[series!]
 	][
 		#if debug? = yes [if verbose > 1 [len: -1 indent: indent + 1]]
 		
@@ -161,13 +219,21 @@ collector: context [
 					series: as red-series! value
 					if series/node <> null [			;-- can happen in routine
 						#if debug? = yes [if verbose > 1 [print ["len: " block/rs-length? as red-block! series]]]
-						mark-block as red-block! value
+						s: GET_BUFFER(series)
+						either all [
+							HAS_FREE_WORKER?
+							BIG_BLOCK?(s)
+						][
+							threadpool/add-task as int-ptr! :do-mark-value as int-ptr! value
+						][
+							mark-block as red-block! value
 
-						if TYPE_OF(value) = TYPE_PATH [
-							path: as red-path! value
-							if path/args <> null [
-								;probe "path/args"
-								mark-block-node path/args
+							if TYPE_OF(value) = TYPE_PATH [
+								path: as red-path! value
+								if path/args <> null [
+									;probe "path/args"
+									mark-block-node path/args
+								]
 							]
 						]
 					]
@@ -254,6 +320,15 @@ collector: context [
 		]
 		#if debug? = yes [if verbose > 1 [indent: indent - 1]]
 	]
+
+	do-mark-block-node: func [
+		node  [node!]
+		/local
+			s [series!]
+	][
+		s: as series! node/value
+		mark-values s/offset s/tail
+	]
 	
 	mark-block-node: func [
 		node [node!]
@@ -262,7 +337,14 @@ collector: context [
 	][
 		if keep node [
 			s: as series! node/value
-			mark-values s/offset s/tail
+			either all [
+				HAS_FREE_WORKER?
+				BIG_BLOCK?(s)
+			][
+				threadpool/add-task as int-ptr! :do-mark-block-node node
+			][
+				mark-values s/offset s/tail
+			]
 		]
 	]
 	
@@ -291,6 +373,8 @@ collector: context [
 		]
 			cb
 	][
+		threadpool/init-workers
+
 		#if debug? = yes [if verbose > 1 [
 			#if OS = 'Windows [platform/dos-console?: no]
 			file: "                      "
@@ -339,12 +423,14 @@ collector: context [
 		#if debug? = yes [if verbose > 1 [probe "marking nodes on native stack"]]
 		mark-stack-nodes
 
+		threadpool/wait
+
 		#if debug? = yes [tm1: (platform/get-time yes yes) - tm]	;-- marking time
 
 		#if debug? = yes [if verbose > 1 [probe "sweeping..."]]
 		_hashtable/sweep ownership/table
-		mt-collect-frames COLLECTOR_RELEASE
-		;collect-frames COLLECTOR_RELEASE
+		;mt-collect-frames COLLECTOR_RELEASE
+		collect-frames COLLECTOR_RELEASE
 
 		;-- unmark fixed series
 		unmark root/node
