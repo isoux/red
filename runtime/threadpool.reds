@@ -53,8 +53,8 @@ threadpool: context [
 		/local
 			n	 [integer!]
 	][
-		n: sysconf _SC_NPROCESSORS_ONLN
-		if zero? n [n: sysconf _SC_NPROCESSORS_CONF]
+		n: platform/sysconf _SC_NPROCESSORS_ONLN
+		if zero? n [n: platform/sysconf _SC_NPROCESSORS_CONF]
 		if zero? n [n: 1]
 		n
 	]
