@@ -115,56 +115,17 @@ collector: context [
 		]
 	]
 
-	do-mark-value: func [
-		value [red-value!]
+	do-mark-block: func [
+		blk		 [red-block!]
 		/local
-			series	[red-series!]
-			obj		[red-object!]
-			ctx		[red-context!]
-			hash	[red-hash!]
-			path	[red-path!]
+			path [red-path!]
 	][
-		switch TYPE_OF(value) [
-			TYPE_BLOCK
-			TYPE_PAREN
-			TYPE_ANY_PATH [
-				series: as red-series! value
-				if series/node <> null [			;-- can happen in routine
-					#if debug? = yes [if verbose > 1 [print ["len: " block/rs-length? as red-block! series]]]
-					mark-block as red-block! value
-
-					if TYPE_OF(value) = TYPE_PATH [
-						path: as red-path! value
-						if path/args <> null [
-							;probe "path/args"
-							mark-block-node path/args
-						]
-					]
-				]
+		mark-block blk
+		if TYPE_OF(blk) = TYPE_PATH [
+			path: as red-path! blk
+			if path/args <> null [
+				mark-block-node path/args
 			]
-			TYPE_ERROR
-			TYPE_PORT
-			TYPE_OBJECT [
-				#if debug? = yes [if verbose > 1 [print "object"]]
-				obj: as red-object! value
-				mark-context obj/ctx
-				if obj/on-set <> null [keep obj/on-set]
-			]
-			TYPE_CONTEXT [
-				#if debug? = yes [if verbose > 1 [print "context"]]
-				ctx: as red-context! value
-				;keep ctx/self
-				_hashtable/mark ctx/symbols
-				unless ON_STACK?(ctx) [mark-block-node ctx/values]
-			]
-			TYPE_HASH
-			TYPE_MAP [
-				#if debug? = yes [if verbose > 1 [print "hash/map"]]
-				hash: as red-hash! value
-				mark-block-node hash/node
-				_hashtable/mark hash/table			;@@ check if previously marked
-			]
-			default [0]
 		]
 	]
 
@@ -224,7 +185,7 @@ collector: context [
 							HAS_FREE_WORKER?
 							BIG_BLOCK?(s)
 						][
-							threadpool/add-task as int-ptr! :do-mark-value as int-ptr! value
+							threadpool/add-task as int-ptr! :do-mark-block as int-ptr! value
 						][
 							mark-block as red-block! value
 
