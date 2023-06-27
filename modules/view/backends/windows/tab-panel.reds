@@ -88,7 +88,7 @@ adjust-parent: func [									;-- prevent tabcontrol from having children
 		SetWindowPos
 			hWnd
 			null
-			dpi-scale (as integer! pos/x) + x dpi-scale (as integer! pos/y) + y
+			dpi-scale pos/x + as float32! x dpi-scale pos/y + as float32! y
 			0 0
 			SWP_NOSIZE or SWP_NOZORDER
 	]

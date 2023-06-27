@@ -295,7 +295,6 @@ draw-begin: func [
 	ctx/gp-brush-type:	BRUSH_TYPE_NORMAL
 	ctx/gp-pen-type:	BRUSH_TYPE_NORMAL
 	dc:					null
-
 	ctx/other/gradient-pen/extra:			0
 	ctx/other/gradient-pen/matrix:			0
 	ctx/other/gradient-pen/spread:			WRAP_MODE_TILE
@@ -376,8 +375,8 @@ draw-begin: func [
 	]
 
 	if any [hWnd <> null on-graphic?][
-		if dpi-factor <> 100 [
-			ratio: (as float32! dpi-factor) / (as float32! 100.0)
+		if dpi-factor <> as float32! 100.0 [
+			ratio: dpi-factor / (as float32! 100.0)
 			GdipScaleWorldTransform graphics ratio ratio GDIPLUS_MATRIX_PREPEND
 			ctx/scale-ratio: ratio
 		]
@@ -1127,7 +1126,7 @@ OS-draw-anti-alias: func [
 		GdipSetTextRenderingHint ctx/graphics TextRenderingHintAntiAliasGridFit
 	][
 		ctx/other/GDI+?: no
-		if any [ctx/on-image? dpi-factor <> 100][	;-- always use GDI+ to draw on image
+		if any [ctx/on-image? dpi-factor <> as float32! 100.0][	;-- always use GDI+ to draw on image
 			ctx/other/anti-alias?: yes
 			ctx/other/GDI+?: yes
 		]
@@ -1672,8 +1671,8 @@ OS-draw-text: func [
 	][
 		tm: as tagTEXTMETRIC ctx/other/gradient-pen/colors
 		GetTextMetrics ctx/dc tm
-		x: dpi-scale as integer! pos/x
-		y: dpi-scale as integer! pos/y
+		x: dpi-scale pos/x
+		y: dpi-scale pos/y
 		p: str
 		while [len > 0][
 			if all [p/1 = #"^/" p/2 = #"^@"][

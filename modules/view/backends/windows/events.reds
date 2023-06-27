@@ -115,8 +115,8 @@ get-event-offset: func [
 				y: 0 - (y or FFFF0000h)
 			]
 			pt: screen-to-client msg/hWnd x y
-			offset/x: as float32! pt/x * 100 / dpi-factor
-			offset/y: as float32! pt/y * 100 / dpi-factor
+			offset/x: dpi-unscale as float32! pt/x
+			offset/y: dpi-unscale as float32! pt/y
 			as red-value! offset
 		]
 		any [
@@ -139,11 +139,11 @@ get-event-offset: func [
 				y: pt/y
 				pt/x: 0 pt/y: 0
 				ClientToScreen msg/hWnd pt
-				offset/x: as float32! x - pt/x * 100 / dpi-factor
-				offset/y: as float32! y - pt/y * 100 / dpi-factor
+				offset/x: dpi-unscale as float32! x - pt/x
+				offset/y: dpi-unscale as float32! y - pt/y
 			][
-				offset/x: as float32! WIN32_LOWORD(value) * 100 / dpi-factor
-				offset/y: as float32! WIN32_HIWORD(value) * 100 / dpi-factor
+				offset/x: dpi-unscale as float32! WIN32_LOWORD(value)
+				offset/y: dpi-unscale as float32! WIN32_HIWORD(value)
 			]
 			as red-value! offset
 		]
@@ -157,8 +157,8 @@ get-event-offset: func [
 
 			value: GetMessagePos
 			pt: screen-to-client msg/hWnd WIN32_LOWORD(value) WIN32_HIWORD(value)
-			offset/x: as float32! pt/x * 100 / dpi-factor
-			offset/y: as float32! pt/y * 100 / dpi-factor
+			offset/x: dpi-unscale as float32! pt/x
+			offset/y: dpi-unscale as float32! pt/y
 			as red-value! offset
 		]
 		any [
@@ -174,15 +174,15 @@ get-event-offset: func [
 			offset/header: TYPE_PAIR
 			value: gi/ptsLocation						;-- coordinates of center point		
 
-			offset/x: as float32! WIN32_LOWORD(value) * 100 / dpi-factor
-			offset/y: as float32! WIN32_HIWORD(value) * 100 / dpi-factor
+			offset/x: dpi-unscale as float32! WIN32_LOWORD(value)
+			offset/y: dpi-unscale as float32! WIN32_HIWORD(value)
 			as red-value! offset
 		]
 		evt/type = EVT_MENU [
 			offset: as red-pair! stack/push*
 			offset/header: TYPE_PAIR
-			offset/x: as float32! menu-x * 100 / dpi-factor
-			offset/y: as float32! menu-y * 100 / dpi-factor
+			offset/x: dpi-unscale as float32! menu-x
+			offset/y: dpi-unscale as float32! menu-y
 			as red-value! offset
 		]
 		true [as red-value! none-value]
@@ -829,7 +829,7 @@ process-custom-draw: func [
 				either sym = button [
 					flags: flags or DT_CENTER
 				][
-					rc/left: rc/left + dpi-scale 16
+					rc/left: rc/left + dpi-scale as float32! 16.0
 				]
 				if TYPE_OF(txt) = TYPE_STRING [
 					DrawText DC unicode/to-utf16 txt -1 rc flags
@@ -995,8 +995,8 @@ update-window: func [
 				hdwp
 				hWnd
 				null
-				dpi-scale as integer! pos/x dpi-scale as integer! pos/y
-				dpi-scale as integer! sz/x  dpi-scale as integer! sz/y
+				dpi-scale pos/x dpi-scale pos/y
+				dpi-scale sz/x  dpi-scale sz/y
 				SWP_NOZORDER or SWP_NOACTIVATE
 
 			font: as red-object! values + FACE_OBJ_FONT
@@ -1131,8 +1131,8 @@ WndProc: func [
 
 					offset: as red-pair! values + type
 					offset/header: TYPE_PAIR
-					offset/x: as float32! WIN32_LOWORD(lParam) + x * 100 / dpi-factor
-					offset/y: as float32! WIN32_HIWORD(lParam) + y * 100 / dpi-factor
+					offset/x: dpi-unscale as float32! WIN32_LOWORD(lParam) + x
+					offset/y: dpi-unscale as float32! WIN32_HIWORD(lParam) + y
 
 					values: values + FACE_OBJ_STATE
 					if all [
@@ -1400,7 +1400,8 @@ WndProc: func [
 		WM_DPICHANGED [
 			log-pixels-x: WIN32_LOWORD(wParam)			;-- new DPI
 			log-pixels-y: log-pixels-x
-			dpi-factor: log-pixels-x * 100 / 96
+			dpi-factor: (as float32! log-pixels-x) * (as float32! 100.0)
+			dpi-factor: dpi-factor / (as float32! 96.0)
 			rc: as RECT_STRUCT lParam
 			SetWindowPos 
 				hWnd

@@ -69,7 +69,7 @@ hIMCtx:			as handle! 0
 ime-open?:		no
 ime-font:		as tagLOGFONT allocate 92
 
-dpi-factor:		100
+dpi-factor:		as float32! 100.0
 log-pixels-x:	0
 log-pixels-y:	0
 screen-size-x:	0
@@ -80,17 +80,17 @@ rc-cache:		declare RECT_STRUCT
 kb-state: 		allocate 256							;-- holds keyboard state for keys conversion
 
 dpi-scale: func [
-	num		[integer!]
+	num		[float32!]
 	return: [integer!]
 ][
-	num * dpi-factor / 100
+	as-integer (num * dpi-factor / as float32! 100.0)
 ]
 
 dpi-unscale: func [
-	num		[integer!]
-	return: [integer!]
+	num		[float32!]
+	return: [float32!]
 ][
-	num * 100 / dpi-factor
+	num * as float32! 100.0 / dpi-factor
 ]
 
 clean-up: does [
@@ -742,7 +742,9 @@ get-dpi: func [
 		log-pixels-x: GetDeviceCaps hScreen 88			;-- LOGPIXELSX
 		log-pixels-y: GetDeviceCaps hScreen 90			;-- LOGPIXELSY
 	]
-	dpi-factor: log-pixels-x * 100 / 96
+	dpi-factor: (as float32! log-pixels-x) * as float32! 100.0
+	dpi-factor: dpi-factor / as float32! 96.0
+	?? dpi-factor
 ]
 
 get-metrics: func [
@@ -1135,7 +1137,7 @@ get-screen-size: func [
 ][
 	screen-size-x: GetDeviceCaps hScreen HORZRES
 	screen-size-y: GetDeviceCaps hScreen VERTRES
-	pair/push-int screen-size-x * 100 / dpi-factor screen-size-y * 100 / dpi-factor
+	pair/push dpi-unscale as float32! screen-size-x dpi-unscale as float32! screen-size-y
 ]
 
 dwm-composition-enabled?: func [
@@ -1462,8 +1464,8 @@ OS-make-view: func [
 			if size/y < as float32! 0.0 [size/y: as float32! 200.0]
 			rc/left: 0
 			rc/top: 0
-			rc/right:  dpi-scale as integer! size/x
-			rc/bottom: dpi-scale as integer! size/y
+			rc/right:  dpi-scale size/x
+			rc/bottom: dpi-scale size/y
 			AdjustWindowRectEx rc flags menu-bar? menu window ws-flags
 			rc/right: rc/right - rc/left
 			rc/bottom: rc/bottom - rc/top
@@ -1503,11 +1505,11 @@ OS-make-view: func [
 		parent: as-integer evolve-base-face as handle! parent
 	]
 
-	off-x:	dpi-scale as integer! offset/x
-	off-y:	dpi-scale as integer! offset/y
+	off-x:	dpi-scale offset/x
+	off-y:	dpi-scale offset/y
 	if sym <> window [
-		rc/right:	dpi-scale as integer! size/x
-		rc/bottom:	dpi-scale as integer! size/y
+		rc/right:	dpi-scale size/x
+		rc/bottom:	dpi-scale size/y
 	]
 
 	handle: CreateWindowEx
@@ -1621,8 +1623,8 @@ OS-make-view: func [
 					if null? main-hWnd [main-hWnd: handle]
 				]
 			]
-			offset/x: as float32! off-x - rc/left * 100 / dpi-factor
-			offset/y: as float32! off-y - rc/top * 100 / dpi-factor
+			offset/x: dpi-unscale as float32! off-x - rc/left
+			offset/y: dpi-unscale as float32! off-y - rc/top
 			SetWindowLong
 				handle
 				wc-offset - 8
@@ -1669,8 +1671,8 @@ change-size: func [
 		process-layered-region hWnd size pos as red-block! vals + FACE_OBJ_PANE pos null layer?
 	]
 
-	sz-x: dpi-scale as integer! size/x
-	sz-y: dpi-scale as integer! size/y
+	sz-x: dpi-scale size/x
+	sz-y: dpi-scale size/y
 	SetWindowPos 
 		hWnd
 		as handle! 0
@@ -1736,8 +1738,8 @@ change-offset: func [
 	flags: SWP_NOSIZE or SWP_NOZORDER or SWP_NOACTIVATE
 	layer?: (GetWindowLong hWnd GWL_EXSTYLE) and WS_EX_LAYERED > 0
 
-	pos-x: dpi-scale as integer! pos/x
-	pos-y: dpi-scale as integer! pos/y
+	pos-x: dpi-scale pos/x
+	pos-y: dpi-scale pos/y
 	if all [					;-- caret widget
 		layer?
 		type = base
@@ -2158,8 +2160,8 @@ change-parent: func [
 			x: WIN32_LOWORD(pos)
 			y: WIN32_HIWORD(pos)
 			offset: as red-pair! values + FACE_OBJ_OFFSET
-			pt/x: dpi-scale as integer! offset/x
-			pt/y: dpi-scale as integer! offset/y
+			pt/x: dpi-scale offset/x
+			pt/y: dpi-scale offset/y
 			position-base hWnd handle :pt
 			SetWindowPos hWnd null pt/x pt/y 0 0 SWP_NOSIZE or SWP_NOZORDER or SWP_NOACTIVATE
 			pt/x: pt/x - x
@@ -2469,8 +2471,8 @@ OS-to-image: func [
 	screen?: screen = sym
 	either screen? [
 		size: as red-pair! get-node-facet face/ctx FACE_OBJ_SIZE
-		width: dpi-scale as integer! size/x
-		height: dpi-scale as integer! size/y
+		width: dpi-scale size/x
+		height: dpi-scale size/y
 		rc/left: 0
 		rc/top: 0
 		dc: hScreen
